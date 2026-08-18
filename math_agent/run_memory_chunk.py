@@ -118,6 +118,7 @@ def build_params():
     params['long_capacity_entries'] = 100000  # effectively unlimited at our trial counts
     params['similarity_threshold'] = 0.85
     params['memory_dopamine_gain'] = 1.2
+    params['recall_rate_gain'] = 150 * Hz  # extra Poisson drive onto the recalled motor slot, scaled by similarity (0-1)
     params['short_atrophy_patience'] = 5    # trials with no reference before Short -> Long transform
     params['long_die_patience'] = 25        # trials with no reference before a Long neuron is pruned ("extremely slowly")
     return params
@@ -338,11 +339,36 @@ def main():
     query_vec = episode_embedding(a, b)
     referenced = {}
     best_similarity = {}
+    recalled_digit = {}
     for key, idx in active_memory.items():
         embs = memory_bank[key]['embeddings']
-        best = max((situation_sim(query_vec, e) for e in embs), default=0.0)
-        best_similarity[key] = best
-        referenced[key] = best >= params['similarity_threshold']
+        metas = memory_bank[key]['meta']
+        sims = [situation_sim(query_vec, e) for e in embs]
+        if sims:
+            best_i = int(np.argmax(sims))
+            best_similarity[key] = sims[best_i]
+            recalled_digit[key] = metas[best_i]['true_digit']
+        else:
+            best_similarity[key] = 0.0
+            recalled_digit[key] = None
+        referenced[key] = best_similarity[key] >= params['similarity_threshold']
+
+    # --- CAUSAL RECALL: a referenced memory injects extra excitatory drive
+    # directly onto the motor slot for the digit it remembers, biasing this
+    # trial's vote toward that recollection -- competing with (or reinforcing)
+    # the sensory-driven signal instead of just sitting in a separate reward
+    # ledger. Multiple referenced memories pointing at the same digit stack.
+    recall_rate_by_slot = {}
+    recall_events = []
+    for key in active_memory:
+        if not referenced[key] or recalled_digit[key] is None:
+            continue
+        digit = recalled_digit[key]
+        slot_idx = motor_indices[digit]
+        boost = params['recall_rate_gain'] * best_similarity[key]
+        recall_rate_by_slot[slot_idx] = recall_rate_by_slot.get(slot_idx, 0 * Hz) + boost
+        recall_events.append({'key': key, 'recalled_digit': digit,
+                               'similarity': best_similarity[key], 'boost_hz': float(boost / Hz)})
 
     # --- SENSORY: rate-code the operands ---
     groups = digit_groups()
@@ -352,6 +378,9 @@ def main():
         rate = params['r_base'] + d * params['r_step']
         for fid in groups[pos]:
             rate_by_index[flyid2i[str(fid)]] = rate
+
+    for slot_idx, boost in recall_rate_by_slot.items():
+        rate_by_index[slot_idx] = rate_by_index.get(slot_idx, 0 * Hz) + boost
 
     pois = _make_poisson_inputs_variable(neu, rate_by_index, params)
     net = Network(neu, syn, lateral_inh, spk_mon, *pois)
@@ -447,7 +476,8 @@ def main():
         else:
             bank['no_reference_streak'] += 1
         memory_log[key] = {'role': bank['role'], 'similarity': best_similarity[key],
-                            'referenced': referenced[key], 'no_reference_streak': bank['no_reference_streak'],
+                            'referenced': referenced[key], 'recalled_digit': recalled_digit[key],
+                            'no_reference_streak': bank['no_reference_streak'],
                             'n_stored': len(bank['embeddings'])}
 
     # --- MEMORY: write (only neurons that actually fired this trial) ---
@@ -502,6 +532,8 @@ def main():
         'mean_abs_w_mV': float(np.mean(np.abs(w_new))),
         'mean_abs_elig_mV': float(np.mean(np.abs(elig))),
         'memory_events': [],
+        'recall_events': recall_events,
+        'recall_matched_true_digit': any(e['recalled_digit'] == true_digit for e in recall_events) if recall_events else None,
     }
 
     if (chunk_index + 1) % args.review_every == 0:
