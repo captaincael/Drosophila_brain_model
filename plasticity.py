@@ -52,6 +52,14 @@ plastic_params.update({
     'growth_step'  : 1.5,         # multiplicative ceiling growth once growth_thr is reached
     'atrophy_thr'  : 0.02 * mV,   # |eligibility| below this over a review window -> "unused"
     'atrophy_rate' : 0.9,         # multiplicative decay applied to unused synapses' weight
+
+    # neurogenesis: spawn a new neuron when an existing one is saturated (rewarded,
+    # but out of headroom to grow further) for several reviews in a row
+    'neurogenesis'    : True,
+    'sat_frac_thr'    : 0.6,      # fraction of a neuron's outgoing synapses near ceiling to count it as "saturated" this review
+    'sat_patience'    : 3,        # consecutive saturated reviews before a neuron earns a duplicate
+    'duplicate_scale' : 0.5,      # new neuron's copied synapses start at this fraction of the parent's weight/ceiling
+    'max_new_neurons' : 20,       # hard cap on neurons grown in one experiment run
 })
 
 
@@ -125,6 +133,178 @@ def create_plastic_model(path_comp, path_con, params):
     return neu, syn, spk_mon, df_comp
 
 
+def snapshot_state(neu, syn):
+    '''Pull a live network's full state into plain numpy arrays.
+
+    This is the hand-off point for neurogenesis: Brian2 can't resize a
+    `NeuronGroup`/`Synapses` in place, so growing the network means capturing
+    everything here, building a bigger network, and restoring it below.
+    '''
+
+    return {
+        'v'      : np.asarray(neu.v[:] / mV),
+        'g'      : np.asarray(neu.g[:] / mV),
+        'rfc'    : np.asarray(neu.rfc[:] / ms),
+        'i'      : np.asarray(syn.i[:]),
+        'j'      : np.asarray(syn.j[:]),
+        'w'      : np.asarray(syn.w[:] / mV),
+        'w_max'  : np.asarray(syn.w_max[:] / mV),
+        'w_sign' : np.asarray(syn.w_sign[:]),
+        'apre'   : np.asarray(syn.apre[:]),
+        'apost'  : np.asarray(syn.apost[:]),
+        'elig'   : np.asarray(syn.elig[:] / mV),
+    }
+
+
+def find_growth_candidates(state, sat_streak, params):
+    '''Decide which existing neurons have earned a duplicate this review.
+
+    A neuron is "saturated" this review if most of its outgoing synapses are
+    pinned near their ceiling (i.e. reward keeps pushing them up but there's
+    no more headroom). `sat_streak` counts consecutive saturated reviews per
+    neuron; once a neuron crosses `sat_patience` it is returned as a growth
+    candidate and its streak resets.
+
+    Parameters
+    ----------
+    state : dict
+        output of `snapshot_state`
+    sat_streak : np.ndarray
+        persistent per-neuron counter, updated in place
+
+    Returns
+    -------
+    candidates : list of int
+        indices of neurons to duplicate this review
+    '''
+
+    n_neu = len(state['v'])
+    near_ceiling = np.abs(state['w']) >= params['growth_thr'] * np.maximum(state['w_max'], 1e-9)
+
+    out_count = np.bincount(state['i'], minlength=n_neu)
+    out_sat = np.bincount(state['i'], weights=near_ceiling.astype(float), minlength=n_neu)
+    frac_sat = np.divide(out_sat, out_count, out=np.zeros(n_neu), where=out_count > 0)
+
+    saturated = frac_sat >= params['sat_frac_thr']
+    sat_streak[saturated] += 1
+    sat_streak[~saturated] = 0
+
+    candidates = list(np.where(sat_streak >= params['sat_patience'])[0])
+    for idx in candidates:
+        sat_streak[idx] = 0
+
+    return candidates
+
+
+def rebuild_model_with_growth(state, params, parents):
+    '''Rebuild the network one size larger, duplicating each neuron in `parents`.
+
+    Each new neuron is spliced in as a partial copy of its parent: it inherits
+    a scaled-down (`duplicate_scale`) version of the parent's incoming and
+    outgoing synapses, and starts at resting potential. All pre-existing
+    neuron/synapse state is restored exactly (this is the actual "growth"
+    step -- everything before this call ran on the old, smaller network).
+
+    Parameters
+    ----------
+    state : dict
+        output of `snapshot_state`, taken from the network being grown
+    parents : list of int
+        neuron indices to duplicate
+
+    Returns
+    -------
+    neu, syn, spk_mon : brian2 objects for the new, larger network
+    new_indices : list of int
+        indices assigned to the newly grown neurons (in `parents` order)
+    '''
+
+    n_old = len(state['v'])
+    n_new = len(parents)
+    n_total = n_old + n_new
+    scale = params['duplicate_scale']
+
+    neu = NeuronGroup(
+        N=n_total, model=params['eqs'], method='linear',
+        threshold=params['eq_th'], reset=params['eq_rst'],
+        refractory='rfc', name='default_neurons', namespace=params,
+    )
+    neu.v[:n_old] = state['v'] * mV
+    neu.g[:n_old] = state['g'] * mV
+    neu.rfc[:n_old] = state['rfc'] * ms
+    neu.v[n_old:] = params['v_0']
+    neu.g[n_old:] = 0 * mV
+    neu.rfc[n_old:] = params['t_rfc']
+
+    syn_model = dedent('''
+        w        : volt
+        w_max    : volt
+        w_sign   : 1
+        dapre/dt  = -apre/tau_pre   : 1    (event-driven)
+        dapost/dt = -apost/tau_post : 1    (event-driven)
+        delig/dt  = -elig/tau_elig  : volt (clock-driven)
+        ''')
+    syn = Synapses(
+        neu, neu, syn_model,
+        on_pre='g += w; apre += A_pre; elig += apost*elig_gain',
+        on_post='apost += A_post; elig += apre*elig_gain',
+        delay=params['t_dly'],
+        name='plastic_synapses',
+        namespace=params,
+    )
+
+    i_parts  = [state['i']]
+    j_parts  = [state['j']]
+    w_parts  = [state['w']]
+    wm_parts = [state['w_max']]
+    sg_parts = [state['w_sign']]
+    ap_parts = [state['apre']]
+    ao_parts = [state['apost']]
+    el_parts = [state['elig']]
+
+    new_indices = []
+    for k, parent in enumerate(parents):
+        new_idx = n_old + k
+        new_indices.append(new_idx)
+
+        out_mask = state['i'] == parent
+        in_mask = state['j'] == parent
+        n_out = int(out_mask.sum())
+        n_in = int(in_mask.sum())
+
+        # outgoing: new neuron -> parent's post-synaptic targets
+        i_parts.append(np.full(n_out, new_idx))
+        j_parts.append(state['j'][out_mask])
+        w_parts.append(state['w'][out_mask] * scale)
+        wm_parts.append(state['w_max'][out_mask] * scale)
+        sg_parts.append(state['w_sign'][out_mask])
+        ap_parts.append(np.zeros(n_out))
+        ao_parts.append(np.zeros(n_out))
+        el_parts.append(np.zeros(n_out))
+
+        # incoming: parent's pre-synaptic sources -> new neuron
+        i_parts.append(state['i'][in_mask])
+        j_parts.append(np.full(n_in, new_idx))
+        w_parts.append(state['w'][in_mask] * scale)
+        wm_parts.append(state['w_max'][in_mask] * scale)
+        sg_parts.append(state['w_sign'][in_mask])
+        ap_parts.append(np.zeros(n_in))
+        ao_parts.append(np.zeros(n_in))
+        el_parts.append(np.zeros(n_in))
+
+    syn.connect(i=np.concatenate(i_parts), j=np.concatenate(j_parts))
+    syn.w = np.concatenate(w_parts) * mV
+    syn.w_max = np.concatenate(wm_parts) * mV
+    syn.w_sign = np.concatenate(sg_parts)
+    syn.apre = np.concatenate(ap_parts)
+    syn.apost = np.concatenate(ao_parts)
+    syn.elig = np.concatenate(el_parts) * mV
+
+    spk_mon = SpikeMonitor(neu)
+
+    return neu, syn, spk_mon, new_indices
+
+
 def update_weights(syn, dopamine, params):
     '''Reward-gate the eligibility trace into a weight change (one chunk's worth).
 
@@ -170,16 +350,31 @@ def apply_growth_atrophy(syn, params):
     return float(unused.mean()), float(near_ceiling.mean())
 
 
+def _make_poisson_inputs(neu, exc, rate, params):
+    pois = []
+    for i in exc:
+        p = PoissonInput(target=neu[i], target_var='v', N=1, rate=rate,
+                          weight=params['w_syn'] * params['f_poi'])
+        neu[i].rfc = 0 * ms
+        pois.append(p)
+    return pois
+
+
 def run_plastic_experiment(path_comp, path_con, neu_exc, neu_reward,
                             params=plastic_params, n_chunks=10, review_every=5,
                             r_poi=None, penalty=-0.2, verbose=True):
-    '''Run a short reward/growth pilot on the full connectome.
+    '''Run a reward/growth/neurogenesis pilot on a connectome.
 
     Neurons in `neu_exc` receive Poisson input for the whole run (the
     "sensory" side). Every `chunk_dt`, we check whether any neuron in
     `neu_reward` (the "motor"/output side) spiked since the last check; that
-    gates a dopamine-style weight update via `update_weights`, and every
-    `review_every` chunks `apply_growth_atrophy` runs a structural pass.
+    gates a dopamine-style weight update via `update_weights`. Every
+    `review_every` chunks, `apply_growth_atrophy` runs a structural pass
+    (ceiling growth / atrophy), and if `params['neurogenesis']` is set, any
+    neuron that has been pinned at its ceiling for `sat_patience` reviews in a
+    row is duplicated: the live network is snapshotted, rebuilt one neuron
+    larger per candidate via `rebuild_model_with_growth`, and the run
+    continues on the bigger network.
 
     Parameters
     ----------
@@ -190,7 +385,7 @@ def run_plastic_experiment(path_comp, path_con, neu_exc, neu_reward,
     n_chunks : int
         number of `params['chunk_dt']`-long chunks to run
     review_every : int
-        run `apply_growth_atrophy` every this many chunks
+        run `apply_growth_atrophy` (and the neurogenesis check) every this many chunks
     r_poi : brian2 Hz quantity, optional
         override for the Poisson input rate (defaults to `params['r_poi']`)
     penalty : float
@@ -198,26 +393,26 @@ def run_plastic_experiment(path_comp, path_con, neu_exc, neu_reward,
 
     Returns
     -------
-    neu, syn, spk_mon : brian2 objects (final state)
+    neu, syn, spk_mon : brian2 objects (final state, possibly grown)
     log : list of dict
-        one entry per chunk with reward/weight/eligibility/growth stats
+        one entry per chunk with reward/weight/eligibility/growth/neurogenesis stats
+    grown : list of dict
+        one entry per neuron actually grown: {'index', 'parent', 'chunk'}
     '''
 
     neu, syn, spk_mon, df_comp = create_plastic_model(path_comp, path_con, params)
+    n_original = len(df_comp)
 
     flyid2i = {j: i for i, j in enumerate(df_comp.index)}
     exc = [flyid2i[n] for n in neu_exc]
     reward_idx = [flyid2i[n] for n in neu_reward]
 
     rate = r_poi if r_poi is not None else params['r_poi']
-    pois = []
-    for i in exc:
-        p = PoissonInput(target=neu[i], target_var='v', N=1, rate=rate,
-                          weight=params['w_syn'] * params['f_poi'])
-        neu[i].rfc = 0 * ms
-        pois.append(p)
-
+    pois = _make_poisson_inputs(neu, exc, rate, params)
     net = Network(neu, syn, spk_mon, *pois)
+
+    sat_streak = np.zeros(n_original + params['max_new_neurons'])
+    grown = []
 
     log = []
     prev_reward_spikes = 0
@@ -234,6 +429,7 @@ def run_plastic_experiment(path_comp, path_con, neu_exc, neu_reward,
 
         entry = {
             'chunk': c,
+            'n_neurons': len(neu),
             'reward_spikes': chunk_reward_spikes,
             'dopamine': dopamine,
             'total_spikes': int(counts.sum()),
@@ -243,12 +439,35 @@ def run_plastic_experiment(path_comp, path_con, neu_exc, neu_reward,
         }
 
         if (c + 1) % review_every == 0:
+            # judge neurogenesis against the ceiling as it stood BEFORE this
+            # review's growth pass raises it -- otherwise a synapse that just
+            # got more headroom never looks "stuck" long enough to trigger it
+            candidates = []
+            if params.get('neurogenesis', False) and len(grown) < params['max_new_neurons']:
+                pre_state = snapshot_state(neu, syn)
+                candidates = find_growth_candidates(pre_state, sat_streak[:len(neu)], params)
+                candidates = candidates[: params['max_new_neurons'] - len(grown)]
+
             frac_atrophied, frac_grown = apply_growth_atrophy(syn, params)
             entry['frac_atrophied'] = frac_atrophied
             entry['frac_grown'] = frac_grown
+
+            if candidates:
+                state = snapshot_state(neu, syn)
+                neu, syn, spk_mon, new_indices = rebuild_model_with_growth(state, params, candidates)
+                prev_reward_spikes = 0  # fresh SpikeMonitor
+                pois = _make_poisson_inputs(neu, exc, rate, params)
+                net = Network(neu, syn, spk_mon, *pois)
+
+                for parent, new_idx in zip(candidates, new_indices):
+                    grown.append({'index': new_idx, 'parent': parent, 'chunk': c})
+
+                    sat_streak = np.concatenate([sat_streak, np.zeros(len(new_indices))])
+                    entry['neurons_grown'] = new_indices
+                    entry['n_neurons'] = len(neu)
 
         log.append(entry)
         if verbose:
             print(entry)
 
-    return neu, syn, spk_mon, log
+    return neu, syn, spk_mon, log, grown
