@@ -118,7 +118,12 @@ def build_params():
     params['long_capacity_entries'] = 100000  # effectively unlimited at our trial counts
     params['similarity_threshold'] = 0.85
     params['memory_dopamine_gain'] = 1.2
-    params['recall_rate_gain'] = 150 * Hz  # extra Poisson drive onto the recalled motor slot, scaled by similarity (0-1)
+    params['recall_rate_gain'] = 45 * Hz   # extra Poisson drive onto the recalled motor slot, scaled by similarity (0-1)
+    # was 150Hz summed across every referencing neuron (up to ~900Hz combined -- an effective
+    # override of the sensory signal, confirmed empirically: 0/16 wrong-recall trials ever
+    # recovered). Now: comparable in scale to a single sensory digit-group (40-310Hz) so recall
+    # is one more vote, not a veto -- and MAX (not sum) across referencing neurons below, so
+    # several redundant memories agreeing doesn't multiply the effect.
     params['short_atrophy_patience'] = 5    # trials with no reference before Short -> Long transform
     params['long_die_patience'] = 25        # trials with no reference before a Long neuron is pruned ("extremely slowly")
     return params
@@ -366,7 +371,7 @@ def main():
         digit = recalled_digit[key]
         slot_idx = motor_indices[digit]
         boost = params['recall_rate_gain'] * best_similarity[key]
-        recall_rate_by_slot[slot_idx] = recall_rate_by_slot.get(slot_idx, 0 * Hz) + boost
+        recall_rate_by_slot[slot_idx] = max(recall_rate_by_slot.get(slot_idx, 0 * Hz), boost)
         recall_events.append({'key': key, 'recalled_digit': digit,
                                'similarity': best_similarity[key], 'boost_hz': float(boost / Hz)})
 
