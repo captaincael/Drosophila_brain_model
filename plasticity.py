@@ -333,6 +333,70 @@ def build_from_state(state, params):
     return neu, syn, spk_mon
 
 
+def prune_neurons(state, prune_indices):
+    '''The subtractive counterpart to `rebuild_model_with_growth`: remove the
+    given neuron indices (and every synapse touching them) from a snapshot.
+
+    Nothing in this codebase has removed a neuron before -- growth only ever
+    adds. This is what makes real death possible (as opposed to a neuron
+    just decaying toward zero forever), e.g. for a memory neuron that's
+    genuinely never referenced again.
+
+    Parameters
+    ----------
+    state : dict
+        output of `snapshot_state`
+    prune_indices : list of int
+        neuron indices to remove
+
+    Returns
+    -------
+    new_state : dict
+        a smaller state dict, ready for `build_from_state`
+    old_to_new : dict
+        old neuron index -> new neuron index for every surviving neuron;
+        pruned neurons are omitted (not mapped to None) so callers can use
+        `old_to_new.get(old_idx)` to detect removal
+    '''
+
+    n_old = len(state['v'])
+    prune_set = set(int(i) for i in prune_indices)
+    keep_mask = np.array([i not in prune_set for i in range(n_old)])
+
+    old_to_new = {}
+    new_i = 0
+    for old_i in range(n_old):
+        if keep_mask[old_i]:
+            old_to_new[old_i] = new_i
+            new_i += 1
+
+    remap = np.full(n_old, -1, dtype=int)
+    for old_i, new_i_ in old_to_new.items():
+        remap[old_i] = new_i_
+
+    syn_i = state['i']
+    syn_j = state['j']
+    syn_keep = keep_mask[syn_i] & keep_mask[syn_j]
+
+    new_state = {
+        'v': state['v'][keep_mask],
+        'g': state['g'][keep_mask],
+        'rfc': state['rfc'][keep_mask],
+        'i': remap[syn_i[syn_keep]],
+        'j': remap[syn_j[syn_keep]],
+        'w': state['w'][syn_keep],
+        'w_max': state['w_max'][syn_keep],
+        'w_sign': state['w_sign'][syn_keep],
+        'apre': state['apre'][syn_keep],
+        'apost': state['apost'][syn_keep],
+        'elig': state['elig'][syn_keep],
+    }
+    if 'sat_streak' in state:
+        new_state['sat_streak'] = state['sat_streak'][keep_mask]
+
+    return new_state, old_to_new
+
+
 def external_reward_dopamine(correct, chunk_total_spikes, n_active_synapses, n_grown_neurons, params):
     '''Dopamine driven by an external task signal (e.g. was the math answer
     correct) instead of a reward-neuron firing event, but still charged the

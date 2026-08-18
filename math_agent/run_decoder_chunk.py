@@ -90,6 +90,16 @@ def build_params():
     params['w_lat_inh'] = -6 * mV     # fixed (non-plastic) lateral inhibition strength among the 10 motor digit-slots
     params['w_floor'] = 0.05 * mV     # homeostatic floor: excitatory synapses can never be punished all the way to 0
     params['motor_drive_boost'] = 3.0   # one-time startup boost to the raw connectome weight of any synapse landing on a motor neuron
+
+    # recalibrated resource costs: with active_syn_thr this low, n_active_synapses sits at
+    # ~29,000 essentially every trial regardless of what happens, so the inherited
+    # cost_synapse=2e-5 was a near-constant ~0.59 tax on EVERY trial in every run so far
+    # (v1-v5), not something specific to this run's stronger drive. cost_spike also needs
+    # to come down to match the ~10x higher spike volume from the 200ms chunk + boosted
+    # drive. Both are rescaled so a typical trial's total cost is a small fraction of the
+    # +-1.0 task reward, not big enough to swamp it.
+    params['cost_spike'] = 5e-5      # was 2e-4 (inherited default) -- ~1750 spikes/trial now -> ~0.09 instead of ~0.35
+    params['cost_synapse'] = 2e-6    # was 2e-5 (inherited default) -- ~29000 active synapses -> ~0.06 instead of ~0.59
     params['mutate_patience'] = 3       # consecutive wrong-and-won trials before a motor neuron's traits get mutated
     params['mutate_dampen_scale'] = 0.15  # non-sensory incoming synapses (the "free ride" pathway) scaled down by this
     params['mutate_sensory_jitter_mV'] = 1.5  # sensory-incoming synapses get reshuffled to a fresh random value in [0, this]

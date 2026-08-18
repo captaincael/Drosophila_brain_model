@@ -1,0 +1,9 @@
+
+One have some Central class neurons be Memory_Short and Memory_Long each are going to be used to retain memory both are going to use Vector embedding to store infomaiton.
+
+Memory_Short neurons have a storage size of 100 kilabyte. it is rewarded when it and it's data are referenced by the connectmo. when it half to atrophy it transform into a Memory_Long.
+
+Memory_Long atrophies extremely slowly but will die off if never referenced by anything.
+ 
+
+IF the connectmo trie to save something and there is no room it cause neurongensis and creates a new Memory_Short
