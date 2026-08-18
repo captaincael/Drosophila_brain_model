@@ -60,6 +60,17 @@ plastic_params.update({
     'sat_patience'    : 3,        # consecutive saturated reviews before a neuron earns a duplicate
     'duplicate_scale' : 0.5,      # new neuron's copied synapses start at this fraction of the parent's weight/ceiling
     'max_new_neurons' : 20,       # hard cap on neurons grown in one experiment run
+
+    # efficiency: reward isn't just "did the target fire" -- it's also gated by
+    # how fast it fired and how much tissue/activity it cost to get there, so
+    # plasticity (and neurogenesis) are pushed toward cheap, fast solutions
+    # instead of just firing/growing everything harder
+    'penalty'        : -0.2,      # dopamine when the reward neuron(s) don't fire this chunk
+    'speed_gain'     : 0.5,       # max bonus for the reward neuron firing right at the start of the chunk (decays to 0 by chunk end)
+    'active_syn_thr' : 0.05 * mV, # |w| above this counts as an "active" (resource-costing) synapse
+    'cost_spike'     : 2e-4,      # dopamine penalty per network-wide spike this chunk
+    'cost_synapse'   : 2e-5,      # dopamine penalty per active synapse this chunk
+    'cost_neuron'    : 0.05,      # dopamine penalty per neuron grown beyond the original connectome
 })
 
 
@@ -305,6 +316,46 @@ def rebuild_model_with_growth(state, params, parents):
     return neu, syn, spk_mon, new_indices
 
 
+def _reward_latency_ms(spk_mon, reward_idx, chunk_start_ms):
+    '''Milliseconds from the start of the current chunk to the first spike
+    among `reward_idx` neurons, or None if none fired.'''
+
+    t = np.asarray(spk_mon.t[:] / ms)
+    i = np.asarray(spk_mon.i[:])
+    mask = (t >= chunk_start_ms - 1e-6) & np.isin(i, reward_idx)
+    if not mask.any():
+        return None
+    return float(t[mask].min() - chunk_start_ms)
+
+
+def compute_efficiency_reward(chunk_reward_spikes, latency_ms, chunk_total_spikes,
+                               n_active_synapses, n_grown_neurons, params):
+    '''Combine task success, response speed, and resource cost into one dopamine value.
+
+    - task success: +1 this chunk if the reward neuron(s) fired, else `params['penalty']`
+    - speed bonus: extra reward the earlier in the chunk the first reward spike landed
+      (an instant response gets the full `speed_gain`, one at the very end of the
+      chunk gets ~0) -- rewards a fast circuit, not just an eventually-correct one
+    - resource cost: penalizes total network-wide spiking, the number of synapses
+      still "active" (not atrophied), and neurons grown beyond the original
+      connectome -- so a solution that fires everything harder or keeps growing
+      indefinitely is worth less than a lean one that achieves the same task success
+    '''
+
+    task = 1.0 if chunk_reward_spikes > 0 else params['penalty']
+
+    speed = 0.0
+    if chunk_reward_spikes > 0 and latency_ms is not None:
+        chunk_dt_ms = params['chunk_dt'] / ms
+        speed = params['speed_gain'] * max(0.0, 1.0 - latency_ms / chunk_dt_ms)
+
+    cost = (params['cost_spike'] * chunk_total_spikes
+            + params['cost_synapse'] * n_active_synapses
+            + params['cost_neuron'] * n_grown_neurons)
+
+    return task + speed - cost
+
+
 def update_weights(syn, dopamine, params):
     '''Reward-gate the eligibility trace into a weight change (one chunk's worth).
 
@@ -362,7 +413,7 @@ def _make_poisson_inputs(neu, exc, rate, params):
 
 def run_plastic_experiment(path_comp, path_con, neu_exc, neu_reward,
                             params=plastic_params, n_chunks=10, review_every=5,
-                            r_poi=None, penalty=-0.2, verbose=True):
+                            r_poi=None, verbose=True):
     '''Run a reward/growth/neurogenesis pilot on a connectome.
 
     Neurons in `neu_exc` receive Poisson input for the whole run (the
@@ -388,8 +439,6 @@ def run_plastic_experiment(path_comp, path_con, neu_exc, neu_reward,
         run `apply_growth_atrophy` (and the neurogenesis check) every this many chunks
     r_poi : brian2 Hz quantity, optional
         override for the Poisson input rate (defaults to `params['r_poi']`)
-    penalty : float
-        dopamine value used on chunks where the reward neuron(s) did not fire
 
     Returns
     -------
@@ -416,7 +465,9 @@ def run_plastic_experiment(path_comp, path_con, neu_exc, neu_reward,
 
     log = []
     prev_reward_spikes = 0
+    prev_total_spikes = 0
     for c in range(n_chunks):
+        chunk_start_ms = float(net.t / ms)
         net.run(params['chunk_dt'])
 
         counts = np.asarray(spk_mon.count[:])
@@ -424,15 +475,31 @@ def run_plastic_experiment(path_comp, path_con, neu_exc, neu_reward,
         chunk_reward_spikes = total_reward_spikes - prev_reward_spikes
         prev_reward_spikes = total_reward_spikes
 
-        dopamine = 1.0 if chunk_reward_spikes > 0 else penalty
+        total_spikes_cum = int(counts.sum())
+        chunk_total_spikes = total_spikes_cum - prev_total_spikes
+        prev_total_spikes = total_spikes_cum
+
+        latency_ms = None
+        if chunk_reward_spikes > 0:
+            latency_ms = _reward_latency_ms(spk_mon, reward_idx, chunk_start_ms)
+
+        n_active_synapses = int(np.count_nonzero(
+            np.abs(np.asarray(syn.w[:] / mV)) >= (params['active_syn_thr'] / mV)))
+        n_grown_neurons = len(grown)
+
+        dopamine = compute_efficiency_reward(
+            chunk_reward_spikes, latency_ms, chunk_total_spikes,
+            n_active_synapses, n_grown_neurons, params)
         w_new, elig, wmax = update_weights(syn, dopamine, params)
 
         entry = {
             'chunk': c,
             'n_neurons': len(neu),
             'reward_spikes': chunk_reward_spikes,
+            'latency_ms': latency_ms,
             'dopamine': dopamine,
-            'total_spikes': int(counts.sum()),
+            'chunk_total_spikes': chunk_total_spikes,
+            'n_active_synapses': n_active_synapses,
             'mean_abs_w_mV': float(np.mean(np.abs(w_new))),
             'mean_abs_elig_mV': float(np.mean(np.abs(elig))),
             'mean_w_max_mV': float(np.mean(wmax)),
@@ -456,6 +523,7 @@ def run_plastic_experiment(path_comp, path_con, neu_exc, neu_reward,
                 state = snapshot_state(neu, syn)
                 neu, syn, spk_mon, new_indices = rebuild_model_with_growth(state, params, candidates)
                 prev_reward_spikes = 0  # fresh SpikeMonitor
+                prev_total_spikes = 0
                 pois = _make_poisson_inputs(neu, exc, rate, params)
                 net = Network(neu, syn, spk_mon, *pois)
 
