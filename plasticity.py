@@ -316,6 +316,57 @@ def rebuild_model_with_growth(state, params, parents):
     return neu, syn, spk_mon, new_indices
 
 
+def save_state(state, path):
+    '''Persist a `snapshot_state` dict to disk (npz) so a network's state can
+    survive across separate process invocations, not just in-memory rebuilds.'''
+    np.savez(path, **state)
+
+
+def load_state(path):
+    npz = np.load(path)
+    return {k: npz[k] for k in npz.files}
+
+
+def build_from_state(state, params):
+    '''Rebuild a network exactly as saved, with no neurons added.'''
+    neu, syn, spk_mon, _ = rebuild_model_with_growth(state, params, [])
+    return neu, syn, spk_mon
+
+
+def external_reward_dopamine(correct, chunk_total_spikes, n_active_synapses, n_grown_neurons, params):
+    '''Dopamine driven by an external task signal (e.g. was the math answer
+    correct) instead of a reward-neuron firing event, but still charged the
+    same resource cost (spikes / active synapses / grown neurons) so the
+    substrate is still pushed toward efficient solutions.'''
+
+    task = 1.0 if correct else params['penalty']
+    cost = (params['cost_spike'] * chunk_total_spikes
+            + params['cost_synapse'] * n_active_synapses
+            + params['cost_neuron'] * n_grown_neurons)
+    return task - cost
+
+
+def external_reward_dopamine_timed(correct, response_ms, chunk_total_spikes,
+                                    n_active_synapses, n_grown_neurons, params):
+    '''Like `external_reward_dopamine`, but the speed bonus is driven by a
+    real wall-clock response time against `params['deadline_ms']` (e.g. how
+    long an external AI agent took to answer) rather than a neural spike
+    latency. A correct answer right at the deadline earns ~0 speed bonus; an
+    instant one earns the full `speed_gain`. An incorrect answer earns no
+    speed bonus regardless of how fast it was.'''
+
+    task = 1.0 if correct else params['penalty']
+
+    speed = 0.0
+    if correct and response_ms is not None:
+        speed = params['speed_gain'] * max(0.0, 1.0 - response_ms / params['deadline_ms'])
+
+    cost = (params['cost_spike'] * chunk_total_spikes
+            + params['cost_synapse'] * n_active_synapses
+            + params['cost_neuron'] * n_grown_neurons)
+    return task + speed - cost
+
+
 def _reward_latency_ms(spk_mon, reward_idx, chunk_start_ms):
     '''Milliseconds from the start of the current chunk to the first spike
     among `reward_idx` neurons, or None if none fired.'''

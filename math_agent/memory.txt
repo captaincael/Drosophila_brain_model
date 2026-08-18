@@ -1,0 +1,17 @@
+Trial 1 (754 x 214): Solved via two independent decompositions (200+14 and 210+4) and cross-checked -- both gave 161,356. Strategy: split second factor into round tens/hundreds + remainder, compute each partial product separately, then verify with a different split. This catches arithmetic slips reliably. No mistakes this trial; keep using dual-decomposition cross-check for multi-digit products.
+Trial 2 (125 x 859): Used three-way cross-check (859=800+59; 859=860-1; and 125=1000/8 trick giving 859000/8) -- all gave 107,375. Tip: when one factor is 125 (or 25, 250, etc.), converting to a division by 8 (or 4) via powers of 10 is a fast third cross-check. No mistakes.
+Trial 3 (381 x 350): Used triple cross-check -- (381x35)x10 split as 30+5; 350 split as 300+50; 381 split as 400-19 times 350. All three gave 133,350. Strategy of splitting off a round multiple of 10/100 and cross-checking with a different split continues to work well with zero errors -- keep using it.
+Trial 4 (328 x 242): Triple cross-check -- (240+2), (200+42), and (330-2) rounding trick -- all gave 79,376. No mistakes. Rounding one factor up/down to a near multiple of 10 (e.g., 328->330-2) remains a fast, reliable third check alongside splitting the other factor into hundreds+remainder. Keep using triple-decomposition cross-check.
+Trial 5 (854 x 204): Triple cross-check -- (200+4), (800+54), and (210-6) rounding trick -- all gave 174,216. No mistakes. Triple-decomposition cross-check continues to be error-free across 5 trials; keep using it as default strategy.
+
+Trial 6 (792 x 858): Used quadruple cross-check -- (800+58), (700+92), (800-8) rounding, and (860-2) rounding -- all gave 679,536. No mistakes. Triple/quadruple-decomposition cross-check remains error-free across 6 trials; keep using it as default strategy.
+
+Trial 7 (658 x 189): Used quadruple cross-check -- 189=(200-11), 189=(100+89), 658=(660-2), 189=(190-1) -- all gave 124,362. No mistakes. Strategy continues error-free across 7 trials; keep using triple/quadruple-decomposition cross-check as default.
+
+Trial 8 (704 x 532): Used quadruple cross-check -- 532=(500+32), 704=(700+4), 532=(530+2), 532=(540-8) rounding -- all gave 374,528. No mistakes. Strategy continues error-free across 8 trials; keep using triple/quadruple-decomposition cross-check as default.
+
+Trial 9 (9737 x 6994): Used triple cross-check -- 6994=(7000-6), 6994=(6000+994), 9737=(9700+37) -- all gave 68,100,578. No mistakes. Strategy remains error-free across 9 trials, including now with 4-digit x 4-digit; keep using triple/quadruple-decomposition cross-check as default.
+
+Trial 10 (6040 x 7415): Triple cross-check -- 7415=(7000+400+15), 604x7415=(604x7000+604x415)x10, 7415=(7400+15) -- all gave 44,786,600. No mistakes. Strategy remains error-free across 10 trials; keep using triple/quadruple-decomposition cross-check as default.
+
+Trial 11 (7532 x 2070): Dual cross-check -- 2070=(2000+70), 2070=(2100-30) -- both gave 15,591,240. No mistakes. Strategy remains error-free across 11 trials; keep using dual/triple-decomposition cross-check as default.
