@@ -1,0 +1,501 @@
+{
+  "timestamp": "2026-08-18T08:20:02.593128+00:00",
+  "connectome_id": "flywire783_1hop_sugar_mn9_comp-2841515f_con-3ae0f046",
+  "connectome_state": {
+    "flywire_materialization": "783",
+    "annotation_source": "flyconnectome/flywire_annotations (main, 783)",
+    "annotation_table_hash": "719904ab",
+    "n_neurons_original": 544,
+    "n_neurons_current": 544,
+    "n_neurons_grown_total": 0,
+    "n_synapses_total": 29382,
+    "n_active_synapses": 28343,
+    "annotation_coverage_original": 1.0
+  },
+  "set_index": 3,
+  "trial_index": 29,
+  "chunk_index": 28,
+  "operand_a": 9411,
+  "operand_b": 1450,
+  "true_last_digit": 0,
+  "predicted_last_digit": 0,
+  "correct": true,
+  "majority_class_baseline": {
+    "majority_class": 0,
+    "baseline_rate": 0.21428571428571427,
+    "n_trials_seen": 28,
+    "beat_baseline": false
+  },
+  "sensory_encoding": {
+    "a3": {
+      "digit": 9,
+      "rate_hz": 155.0,
+      "neuron_ids": [
+        720575940624963786,
+        720575940630233916,
+        720575940637568838
+      ]
+    },
+    "a2": {
+      "digit": 4,
+      "rate_hz": 80.0,
+      "neuron_ids": [
+        720575940638202345,
+        720575940617000768,
+        720575940630797113
+      ]
+    },
+    "a1": {
+      "digit": 1,
+      "rate_hz": 35.0,
+      "neuron_ids": [
+        720575940632889389,
+        720575940621754367,
+        720575940621502051
+      ]
+    },
+    "a0": {
+      "digit": 1,
+      "rate_hz": 35.0,
+      "neuron_ids": [
+        720575940640649691,
+        720575940639332736
+      ]
+    },
+    "b3": {
+      "digit": 1,
+      "rate_hz": 35.0,
+      "neuron_ids": [
+        720575940616885538,
+        720575940639198653
+      ]
+    },
+    "b2": {
+      "digit": 4,
+      "rate_hz": 80.0,
+      "neuron_ids": [
+        720575940617937543,
+        720575940632425919
+      ]
+    },
+    "b1": {
+      "digit": 5,
+      "rate_hz": 95.0,
+      "neuron_ids": [
+        720575940633143833,
+        720575940612670570
+      ]
+    },
+    "b0": {
+      "digit": 0,
+      "rate_hz": 20.0,
+      "neuron_ids": [
+        720575940628853239,
+        720575940629176663
+      ]
+    }
+  },
+  "motor_decoding": [
+    {
+      "digit_slot": 0,
+      "flyid": 720575940607193986,
+      "cell_type": "CB0845",
+      "spikes": 0
+    },
+    {
+      "digit_slot": 1,
+      "flyid": 720575940610679876,
+      "cell_type": "CB0703",
+      "spikes": 0
+    },
+    {
+      "digit_slot": 2,
+      "flyid": 720575940614734754,
+      "cell_type": "CB0783",
+      "spikes": 0
+    },
+    {
+      "digit_slot": 3,
+      "flyid": 720575940618238523,
+      "cell_type": "CB0701",
+      "spikes": 0
+    },
+    {
+      "digit_slot": 4,
+      "flyid": 720575940623415849,
+      "cell_type": "CB0720",
+      "spikes": 0
+    },
+    {
+      "digit_slot": 5,
+      "flyid": 720575940626094350,
+      "cell_type": "CB0762",
+      "spikes": 0
+    },
+    {
+      "digit_slot": 6,
+      "flyid": 720575940627410451,
+      "cell_type": "CB0858",
+      "spikes": 0
+    },
+    {
+      "digit_slot": 7,
+      "flyid": 720575940628826128,
+      "cell_type": "CB0858",
+      "spikes": 0
+    },
+    {
+      "digit_slot": 8,
+      "flyid": 720575940628997123,
+      "cell_type": "CB0762",
+      "spikes": 0
+    },
+    {
+      "digit_slot": 9,
+      "flyid": 720575940629561347,
+      "cell_type": "CB0845",
+      "spikes": 0
+    }
+  ],
+  "vote_margin": 0,
+  "dopamine": 0.2044542857142857,
+  "dopamine_task": 0.7857142857142857,
+  "dopamine_margin_bonus": 0.0,
+  "dopamine_cost": 0.58126,
+  "n_neurons": 544,
+  "chunk_total_spikes": 72,
+  "n_active_synapses": 28343,
+  "mean_abs_w_mV": 1.0971010083565897,
+  "mean_abs_elig_mV": 0.017887144689820424,
+  "mean_w_max_mV": 3.2471008869960776,
+  "spiking_neurons": [
+    {
+      "id": "720575940630233916",
+      "spikes": 11,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940624963786",
+      "spikes": 9,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940637568838",
+      "spikes": 7,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940612670570",
+      "spikes": 5,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940621502051",
+      "spikes": 5,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940630797113",
+      "spikes": 4,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940632425919",
+      "spikes": 4,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940617000768",
+      "spikes": 3,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940617937543",
+      "spikes": 3,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940621754367",
+      "spikes": 3,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940629888530",
+      "spikes": 3,
+      "role": "other",
+      "super_class": "central",
+      "cell_class": null,
+      "cell_type": "CB0192",
+      "side": "left"
+    },
+    {
+      "id": "720575940628853239",
+      "spikes": 2,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940633143833",
+      "spikes": 2,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940638202345",
+      "spikes": 2,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940639198653",
+      "spikes": 2,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940639332736",
+      "spikes": 2,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940620874757",
+      "spikes": 1,
+      "role": "other",
+      "super_class": "central",
+      "cell_class": null,
+      "cell_type": "CB0616",
+      "side": "left"
+    },
+    {
+      "id": "720575940622695448",
+      "spikes": 1,
+      "role": "other",
+      "super_class": "central",
+      "cell_class": null,
+      "cell_type": "CB0248",
+      "side": "right"
+    },
+    {
+      "id": "720575940625102692",
+      "spikes": 1,
+      "role": "other",
+      "super_class": "central",
+      "cell_class": null,
+      "cell_type": "CB0883",
+      "side": "left"
+    },
+    {
+      "id": "720575940629176663",
+      "spikes": 1,
+      "role": "sensory",
+      "super_class": "sensory",
+      "cell_class": "gustatory",
+      "cell_type": "LB3",
+      "side": "left"
+    },
+    {
+      "id": "720575940647033396",
+      "spikes": 1,
+      "role": "other",
+      "super_class": "ascending",
+      "cell_class": "AN",
+      "cell_type": "AN_GNG_PRW_2",
+      "side": "left"
+    }
+  ],
+  "n_spiking_neurons": 21,
+  "top_synapses_by_eligibility": [
+    {
+      "pre": "720575940624963786",
+      "pre_role": "sensory",
+      "post": "720575940637568838",
+      "post_role": "sensory",
+      "w_mV": 3.692490274834092,
+      "elig_mV": 2.6617844037985336,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940637568838",
+      "pre_role": "sensory",
+      "post": "720575940624963786",
+      "post_role": "sensory",
+      "w_mV": 0.3621971230959662,
+      "elig_mV": 2.6369462059579334,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940628853239",
+      "pre_role": "sensory",
+      "post": "720575940637568838",
+      "post_role": "sensory",
+      "w_mV": 0.0,
+      "elig_mV": 2.363113321158803,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940637568838",
+      "pre_role": "sensory",
+      "post": "720575940630233916",
+      "post_role": "sensory",
+      "w_mV": 0.0,
+      "elig_mV": 2.3217009551071035,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940630233916",
+      "pre_role": "sensory",
+      "post": "720575940624963786",
+      "post_role": "sensory",
+      "w_mV": 0.5072741350123142,
+      "elig_mV": 2.318360620787999,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940624963786",
+      "pre_role": "sensory",
+      "post": "720575940630233916",
+      "post_role": "sensory",
+      "w_mV": 0.0,
+      "elig_mV": 2.3096140597774313,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940630233916",
+      "pre_role": "sensory",
+      "post": "720575940637568838",
+      "post_role": "sensory",
+      "w_mV": 2.2951473181671997,
+      "elig_mV": 2.306865426179115,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940639198653",
+      "pre_role": "sensory",
+      "post": "720575940616885538",
+      "post_role": "sensory",
+      "w_mV": 0.0,
+      "elig_mV": 2.0305232136860676,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940616885538",
+      "pre_role": "sensory",
+      "post": "720575940633143833",
+      "post_role": "sensory",
+      "w_mV": 0.0,
+      "elig_mV": 1.973144759692557,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940616885538",
+      "pre_role": "sensory",
+      "post": "720575940639198653",
+      "post_role": "sensory",
+      "w_mV": 0.0,
+      "elig_mV": 1.969106787160005,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940630797113",
+      "pre_role": "sensory",
+      "post": "720575940637568838",
+      "post_role": "sensory",
+      "w_mV": 0.0,
+      "elig_mV": 1.9638088757080183,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940630797113",
+      "pre_role": "sensory",
+      "post": "720575940624963786",
+      "post_role": "sensory",
+      "w_mV": 0.0,
+      "elig_mV": 1.9548319899177278,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940637568838",
+      "pre_role": "sensory",
+      "post": "720575940633143833",
+      "post_role": "sensory",
+      "w_mV": 0.0,
+      "elig_mV": 1.944035950218735,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940637568838",
+      "pre_role": "sensory",
+      "post": "720575940617000768",
+      "post_role": "sensory",
+      "w_mV": 0.0,
+      "elig_mV": 1.9434506266369387,
+      "class_mult_applied": 0.2
+    },
+    {
+      "pre": "720575940639198653",
+      "pre_role": "sensory",
+      "post": "720575940624963786",
+      "post_role": "sensory",
+      "w_mV": 0.0,
+      "elig_mV": 1.9375448294303006,
+      "class_mult_applied": 0.2
+    }
+  ],
+  "neurons_grown": []
+}

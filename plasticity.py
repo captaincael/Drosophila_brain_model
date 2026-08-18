@@ -411,17 +411,48 @@ def update_weights(syn, dopamine, params):
     '''Reward-gate the eligibility trace into a weight change (one chunk's worth).
 
     dw = lr * dopamine * eligibility, clipped so a synapse never crosses zero
-    (excitatory synapses stay in [0, w_max], inhibitory in [-w_max, 0]).
+    (excitatory synapses stay in [w_floor, w_max], inhibitory in [-w_max, 0]).
+    `w_floor` (default 0mV, i.e. no floor) is a homeostatic guard: with it set
+    above zero, excitatory drive can never be punished all the way to
+    silence, however many chunks in a row get negative dopamine.
     '''
 
     w = np.asarray(syn.w[:] / mV)
     elig = np.asarray(syn.elig[:] / mV)
     wmax = np.asarray(syn.w_max[:] / mV)
     sign = np.asarray(syn.w_sign[:])
+    w_floor = params.get('w_floor', 0 * mV) / mV
 
     w_new = w + params['lr'] * dopamine * elig
 
-    lo = np.where(sign >= 0, 0.0, -wmax)
+    lo = np.where(sign >= 0, w_floor, -wmax)
+    hi = np.where(sign >= 0, wmax, 0.0)
+    w_new = np.clip(w_new, lo, hi)
+
+    syn.w = w_new * mV
+
+    return w_new, elig, wmax
+
+
+def update_weights_classed(syn, dopamine, class_mult, params):
+    '''Like `update_weights`, but scales each synapse's reward-gated update by
+    `class_mult` (one multiplier per synapse) on top of the shared dopamine
+    value. Lets different neuron classes have different "reward weights" --
+    e.g. synapses feeding a decision/motor layer can be made to adapt faster
+    than synapses that should stay a stable sensory encoder, while all
+    synapses still share the same eligibility-trace/dopamine mechanism.
+    Also respects `params['w_floor']`, see `update_weights`.
+    '''
+
+    w = np.asarray(syn.w[:] / mV)
+    elig = np.asarray(syn.elig[:] / mV)
+    wmax = np.asarray(syn.w_max[:] / mV)
+    sign = np.asarray(syn.w_sign[:])
+    w_floor = params.get('w_floor', 0 * mV) / mV
+
+    w_new = w + params['lr'] * dopamine * elig * class_mult
+
+    lo = np.where(sign >= 0, w_floor, -wmax)
     hi = np.where(sign >= 0, wmax, 0.0)
     w_new = np.clip(w_new, lo, hi)
 
@@ -433,18 +464,23 @@ def update_weights(syn, dopamine, params):
 def apply_growth_atrophy(syn, params):
     '''Structural update: widen the ceiling for synapses pushing against it,
     decay synapses that never picked up eligibility (never correlated with
-    reward) toward zero.
+    reward) toward zero -- but never below `params['w_floor']` on the
+    excitatory side, so repeated atrophy passes can't silence the network
+    entirely (same homeostatic guarantee as `update_weights`/`_classed`).
     '''
 
     w = np.asarray(syn.w[:] / mV)
     wmax = np.asarray(syn.w_max[:] / mV)
     elig = np.asarray(syn.elig[:] / mV)
+    sign = np.asarray(syn.w_sign[:])
+    w_floor = params.get('w_floor', 0 * mV) / mV
 
     near_ceiling = np.abs(w) >= params['growth_thr'] * np.maximum(wmax, 1e-9)
     wmax_new = np.where(near_ceiling, wmax * params['growth_step'], wmax)
 
     unused = np.abs(elig) < (params['atrophy_thr'] / mV)
     w_new = np.where(unused, w * params['atrophy_rate'], w)
+    w_new = np.where(sign >= 0, np.maximum(w_new, w_floor), w_new)
 
     syn.w = w_new * mV
     syn.w_max = wmax_new * mV
@@ -455,6 +491,20 @@ def apply_growth_atrophy(syn, params):
 def _make_poisson_inputs(neu, exc, rate, params):
     pois = []
     for i in exc:
+        p = PoissonInput(target=neu[i], target_var='v', N=1, rate=rate,
+                          weight=params['w_syn'] * params['f_poi'])
+        neu[i].rfc = 0 * ms
+        pois.append(p)
+    return pois
+
+
+def _make_poisson_inputs_variable(neu, rate_by_index, params):
+    '''Like `_make_poisson_inputs`, but each neuron gets its own rate --
+    e.g. for rate-coding some piece of information (a digit's value) into
+    a specific sensory neuron's firing rate rather than driving a whole
+    group uniformly.'''
+    pois = []
+    for i, rate in rate_by_index.items():
         p = PoissonInput(target=neu[i], target_var='v', N=1, rate=rate,
                           weight=params['w_syn'] * params['f_poi'])
         neu[i].rfc = 0 * ms

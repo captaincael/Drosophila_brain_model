@@ -1,4 +1,4 @@
-aimport pandas as pd
+import pandas as pd
 from textwrap import dedent
 
 # brian 2
